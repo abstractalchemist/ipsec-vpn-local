@@ -1,0 +1,23 @@
+hostname bgpd
+password zebra
+enable password zebra
+!
+log file /var/log/frr/bgpd.log
+!
+debug bgp events
+debug bgp filters
+debug bgp fsm
+debug bgp keepalives
+debug bgp updates
+!
+router bgp {{ pLocalBgpAsn }} 
+  bgp router-id {{ PRIVATE_IP }} 
+  network {{ pVpcCidr }}
+  neighbor {{ pTunnel1BgpNeighborIpAddress }} remote-as {{ pTunnel1VgwBgpAsn }}
+  neighbor {{ pTunnel2BgpNeighborIpAddress }} remote-as {{ pTunnel2VgwBgpAsn }}
+  neighbor {{ pTunnel2BgpNeighborIpAddress }} route-map RM_LOWER_PRIORITY out
+!
+route-map RM_LOWER_PRIORITY permit 10
+  set as-path prepend {{ pLocalBgpAsn }} {{ pLocalBgpAsn }} {{ pLocalBgpAsn }}
+!
+line vty

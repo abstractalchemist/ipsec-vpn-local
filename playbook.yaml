@@ -1,0 +1,132 @@
+- name: for ipsec network
+  hosts: all
+  vars:
+    primary_interface: enp0s3
+    HOSTNAME: 2603-800c-2a05-a7cf-f5a8-9cdb-e533-f977.res6.spectrum.com
+    PRIVATE_IP: 192.168.86.52
+    pLocalBgpAsn: 64513
+
+    pTunnel1BgpNeighborIpAddress: 169.254.100.1
+    pTunnel1VgwBgpAsn: 64512
+    pTunnel1VgwOutsideIpAddress: 13.52.25.86
+    pTunnel1CgwInsideIpAddress: 169.254.100.2/30
+    pTunnel1VgwInsideIpAddress: 169.254.100.1/30
+
+    pTunnel2BgpNeighborIpAddress: 169.254.101.1
+    pTunnel2VgwBgpAsn: 64512
+    pTunnel2VgwOutsideIpAddress: 52.53.115.161
+    pTunnel2CgwInsideIpAddress: 169.254.101.2/30
+    pTunnel2VgwInsideIpAddress: 169.254.101.1/30
+
+    pVpcCidr: 192.168.86.0/24
+    TUNNEL_1_PSK: u7UAc6Cbx9Fk4Jqc
+    TUNNEL_2_PSK: ugTbzR06vm8KmhjX
+
+  tasks:
+  - name: install pkgs
+    dnf:
+      name:
+      - frr
+      - strongswan
+      - jq
+      - git
+      - vim
+      - sqlite
+      - strongswan-sqlite
+  - name: enable modules
+    command: |-
+      modprobe {{ item }}
+      lsmod | grep {{ item }}
+    args:
+      chdir: /tmp
+    with_items:
+    - ah4
+    - ah6
+    - esp4
+    - esp6
+    - xfrm4_tunnel
+    - xfrm6_tunnel
+    - xfrm_user
+    - ip_tunnel
+    - tunnel4
+    - tunnel6
+    - xfrm4_mode_tunnel
+    - xfrm6_mode_tunnel
+    - pcrypt
+    - xfrm_ipcomp
+    - deflate
+    ignore_errors: true
+  - name: copy zebra to frr
+    template:
+      src: zebra.conf.jinja
+      dest: /etc/frr/zebra.conf
+      owner: frr
+      group: frr
+      mode: "0640"
+  - name: copy bgpd to frr
+    template:
+      src: bgpd.conf.jinja
+      dest: /etc/frr/bgpd.conf
+      owner: frr
+      group: frr
+      mode: "0640"
+  - name: copy ipsec file to strongswan
+    template: 
+      src: ipsec.conf.jinja
+      dest: /etc/strongswan/ipsec.conf
+      owner: root
+      mode: "0600"
+  - name: copy files to strongswan
+    copy:
+      src: strongswan.conf
+      dest: /etc/strongswan/
+      owner: root
+      mode: "0600"
+  - name: copy secrets to strongswan
+    template:
+      src: ipsec.secrets.jinja
+      dest: /etc/strongswan/ipsec.secrets
+      owner: root
+      mode: "0600"
+
+  - name: copy syctcl
+    copy:
+      src: sysctl.conf
+      dest: /etc/
+      owner: root
+      mode: "0600"
+  - name: copy vti script
+    template:
+      src: ipsec-vti.sh.jinja
+      dest: /etc/strongswan/ipsec-vti.sh
+      owner: root
+      mode: "0750"
+  - name: ensure directory
+    file:
+      state: directory
+      name: /etc/swanctl
+      owner: root
+      mode: "0700"
+  - name: copy swanctl script
+    template:
+      src: swanctl.conf.jinja
+      dest: /etc/swanctl/swanctl.conf
+      owner: root
+      mode: "0600"
+
+  - name: load sysctl changes
+    command: sysctl -p /etc/sysctl.conf
+  - name: enable ip forwarding
+    command: "{{ item }}"
+    with_items:
+    - sysctl -w net.ipv4.ip_forward=1 
+    - sysctl -w net.ipv4.conf.{{ primary_interface }}.disable_xfrm=1 
+    - sysctl -w net.ipv4.conf.{{ primary_interface }}.disable_policy=1
+  - name: enable services
+    systemd:
+      name: "{{ item }}"
+      state: restarted
+      enabled: true
+    with_items:
+    - strongswan
+    - frr

@@ -1,0 +1,105 @@
+# ipsec.conf - strongSwan IPsec configuration file
+
+# basic configuration
+
+conn-defaults {
+  aggressive=no
+  mobike=no
+  version = 1
+  dpd_delay=10s
+  dpd_timeout=30s
+  proposals=aes256-sha256-modp2048s256,aes128-sha1-modp1024
+  reauth_time = 0
+  local_addrs=%any
+}
+
+
+
+connections {
+  AWS-VPC-Tunnel-1 : conn-defaults {
+    remote_addrs={{ pTunnel1VgwOutsideIpAddress }}
+    local {
+      auth=psk
+      id=AWS-VPC-Tunnel-1
+    }
+    remote {
+      auth=psk
+
+    }
+    children {
+      AWS-VPC-Tunnel-1 {
+        start_action = trap
+        dpd_action=restart
+        mode=tunnel
+        updown=/etc/strongswan/ipsec-vti.sh
+        close_action = restart
+        esp_proposals=aes128-sha256-modp2048s256,aes128-sha1-modp1024
+        local_ts=0.0.0.0/0,::/0
+        remote_ts=0.0.0.0/0,::/0
+        policies=yes
+        mark_in=100
+        mark_out=100
+      }
+    }
+
+  }
+
+  AWS-VPC-Tunnel-2 : conn-defaults {
+    remote_addrs={{ pTunnel2VgwOutsideIpAddress }}
+    local {
+      auth=psk
+      id=AWS-VPC-Tunnel-2
+    }
+    remote {
+      auth=psk
+
+    }
+    children {
+      AWS-VPC-Tunnel-2 {
+        start_action = trap
+        dpd_action=restart
+        mode=tunnel
+        updown=/etc/strongswan/ipsec-vti.sh
+        close_action = restart
+        esp_proposals=aes128-sha256-modp2048s256,aes128-sha1-modp1024
+        local_ts=0.0.0.0/0,::/0
+        remote_ts=0.0.0.0/0,::/0
+        policies=yes
+        mark_in=100
+        mark_out=100
+      }
+    }
+
+
+  }
+}
+
+secrets {
+  ike-1 {
+    secret = {{ TUNNEL_1_PSK }}
+    id=AWS-VPC-Tunnel-1
+  }
+  ike-2 {
+    secret = {{ TUNNEL_2_PSK }}
+    id=AWS-VPC-Tunnel-2
+  }
+
+  ike-3 {
+    secret = adfweafsd
+    id=cgw-secret
+  }
+}
+
+#conn %default
+#  ikelifetime=28800s
+#  lifetime=3600s
+#  rekey=yes
+#  reauth=no
+#  left=%defaultroute
+#  compress=no
+#
+#conn AWS-VPC-TUNNEL-1
+#  left=%any
+#
+#conn AWS-VPC-TUNNEL-2
+#  left=%any
